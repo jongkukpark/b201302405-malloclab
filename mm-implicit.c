@@ -47,12 +47,8 @@
 #define SIZE_PTR(p)  ((size_t*)(((char*)(p)) - SIZE_T_SIZE))
 
 #define WSIZE 4
-
 #define DSIZE 8
-
-#define CHUNKSIZE(1<<12)
-
-#define OVERHEAD 8
+#define CHUNKSIZE (1<<12)
 
 #define OVERHEAD 8
 
@@ -60,23 +56,23 @@
 
 #define PACK(size, alloc) ((size) | (alloc))
 
-#define GET(p) (*(size_t*)(p))
-
-#define PUT(p, val) (*(size_t*)(p) = (val))
+#define GET(p) (*(unsigned int *)(p))
+#define PUT(p, val) (*(unsigned int *)(p) = (val))
 
 #define GET_SIZE(p) (GET(p) & ~0x7)
 
 #define GET_ALLOC(p) (GET(p) & 0x1)
 
-#define HDRP(bp) ((char*)(bp) - WSIZE)
+#define HDRP(bp) ((char * )(bp) - WSIZE)
 
-#define FTRP(bp) ((char*)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
+#define FTRP(bp) ((char * )(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
-#define NEXT_BLKP(bp) ((char*)(bp) + GET_SIZE((char*)(bp - WSIZE))
+#define NEXT_BLKP(bp) ((char * )(bp) + GET_SIZE((char * )(bp - WSIZE))
 
-#define PREV_BLKP(bp) ((char*)(bp) - GET_SIZE((char*)(bp) - DSIZE))
+#define PREV_BLKP(bp) ((char * )(bp) - GET_SIZE((char * )(bp) - DSIZE))
 
 static char *heap_listp = 0;
+static void *coalesce(void *bp);
 /*
  * Initialize: return -1 on error, 0 on success.
  */
@@ -87,7 +83,7 @@ int mm_init(void) {
 	PUT(heap_listp, 0);
 	PUT(heap_listp + WSIZE, PACK(OVERHEAD, 1));
 	PUT(heap_listp + DSIZE, PACK(OVERHEAD, 1));
-	PUT(heap_listp + WSIZE + DSIZE, PACK(0, 1);
+	PUT(heap_listp + WSIZE + DSIZE, PACK(0, 1));
 	heap_listp += DSIZE;
 
 	if ((exted_heap(CHUNKSIZE / WSIZE)) == NULL)
@@ -127,12 +123,12 @@ void *malloc (size_t size) {
 /*
  * free
  */
-void free (void *ptr) {
+void free (void *bp) {
     if (bp == 0)
 		return;
 	size_t size = GET_SIZE(HDRP(bp));
 
-	PUT(HERP(bp), PACK(size, 0));
+	PUT(HDRP(bp), PACK(size, 0));
 	PUT(FTRP(bp), PACK(size, 0));
 
 	coalesce(bp);
@@ -206,7 +202,7 @@ static int aligned(const void *p) {
 void mm_checkheap(int verbose) {
 }
 
-static void *coalesce(void * bp) {
+static void *coalesce(void *bp) {
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
 	size_t size = GET_SIZE(HDRP(bp));
