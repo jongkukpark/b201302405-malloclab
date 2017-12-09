@@ -100,7 +100,28 @@ int mm_init(void) {
  * malloc
  */
 void *malloc (size_t size) {
-return NULL;
+	size_t asize;
+	size_t extendsize;
+	char *bp;
+
+	if (size == 0)
+		return NULL;
+
+	if (size <= DSIZE)
+		asize = 2 * DSIZE;
+	else
+		asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
+
+	if ((bp = find_fit(asize)) != NULL) {
+		place(bp, size);
+		return bp;
+	}
+
+	extendsize = MAX(asize, CHUNKSIZE);
+	if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
+		return NULL;
+	place(bp, asize);
+	return bp;
 }
 
 /*
@@ -198,11 +219,18 @@ static void *coalesce(void * bp) {
 		PUT(HDRP(bp), PACK(size, 0));
 		PUT(FTRP(bp), PACK(size, 0));
 	}
-	else if() {
-
+	else if(!prev_alloc && next_alloc) {
+		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
+		PUT(FTRP(bp), PACK(size, 0));
+		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+		bp = PREV_BLKP(bp);
 	}
 	else {
-
+		size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
+			GET_SIZE(FTRP(NEXT_BLKP(bp)));
+		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+		PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+		bp = PREV_BLKP(bp);
 	}
 
 	return bp;
