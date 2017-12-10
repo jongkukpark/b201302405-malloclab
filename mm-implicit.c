@@ -87,7 +87,7 @@ int mm_init(void) {
 	PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1));
 	PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1));
 	PUT(heap_listp + (3*WSIZE), PACK(0, 1));
-	heap_listp += DSIZE;
+	heap_listp += (2*WSIZE);
 
 	if ((extend_heap(CHUNKSIZE / WSIZE)) == NULL)
 		return -1;
@@ -112,7 +112,7 @@ void *malloc (size_t size) {
 		asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
 
 	if ((bp = find_fit(asize)) != NULL) {
-		place(bp, size);
+		place(bp, asize);
 		return bp;
 	}
 
