@@ -75,6 +75,7 @@ static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
 static int in_heap(const void *p);
 static int aligned(const void *p);
+static char *nextbp = 0;
 
 /*
  * Initialize: return -1 on error, 0 on success.
@@ -88,7 +89,7 @@ int mm_init(void) {
 	PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1));
 	PUT(heap_listp + (3*WSIZE), PACK(0, 1));
 	heap_listp += (2*WSIZE);
-
+	nextbp = heap_listp;
 	if ((extend_heap(CHUNKSIZE / WSIZE)) == NULL)
 		return -1;
 
@@ -212,7 +213,7 @@ static void *coalesce(void *bp)
 	size_t size = GET_SIZE(HDRP(bp));
 
 	if (prev_alloc && next_alloc) {
-		return bp;
+		
 	}
 
 	else if (prev_alloc && !next_alloc) {
@@ -235,6 +236,7 @@ static void *coalesce(void *bp)
 		PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
 		bp = PREV_BLKP(bp);
 	}
+	nextbp = bp;
 	return bp;
 }
 
@@ -255,10 +257,25 @@ static void *extend_heap(size_t words)
 	}
 
 static void *find_fit(size_t asize) {
-	void *bp;
+   /*
+	*first fit
+	*/
+	/*void *bp;
 
 	for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
 		if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+			return bp;
+		}
+	}
+	return NULL;*/
+   /*
+    *second fit
+	*/
+	void *bp;
+
+	for (bp = nextbp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+		if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+			nextbp = bp;
 			return bp;
 		}
 	}
