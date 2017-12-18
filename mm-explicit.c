@@ -41,6 +41,7 @@
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(p) (((size_t)(p) + (ALIGNMENT-1)) & ~0x7)
 
+#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 #define AlIGNMENT 8
 
 #define HDRSIZE 4
@@ -75,8 +76,16 @@
 #define NEXT_FREE_BLKP(bp) ((char *)GET8((char *)(bp)))
 #define PREV_FREE_BLKP(bp) ((char *)GET8((char *)(bp) + WSIZE))
 
-#define ALIGN(p) (((size_t)(p) + (ALIGNMENT-1)) & ~0x7)
-
+inline void *extend_heap(size_t words);
+static void *find_fit(size_t asize);
+static int in_heap(const void *p);
+static void place(void *bp, size_t asize);
+static void *coalesce(void *bp);
+static int aligned(const void *p);
+static char *nextbp = 0;
+static char *epilogue = 0;
+static char *heap_start = 0;
+static char *h_ptr = 0;
 /*
  * Initialize: return -1 on error, 0 on success.
  */
@@ -96,6 +105,7 @@ int mm_init(void) {
 
 	epilogue = h_ptr + HDRSIZE;
 
+	nextbp = h_ptr;
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
 		return -1;
 
@@ -113,11 +123,12 @@ void *malloc (size_t size) {
 	if (size == 0)
 		return NULL;
 	
-	if (size <= DSIZE)
+	/*if (size <= DSIZE)
 		asize = 3 * DSIZE;
 	else
 		asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1))/ DSIZE) + DSIZE;
-
+*/
+	asize = MAX(ALIGN(size + SIZE_T_SIZE), 24);
 	if ((bp = find_fit(asize)) != NULL) {
 		place(bp, asize);
 		return bp;
@@ -150,12 +161,12 @@ void free (void *bp) {
  */
 void *realloc(void *oldptr, size_t size) {
 	size_t oldsize;
-    void *newptr;
+	void *newptr;
 
   /* If size == 0 then this is just free, and we return NULL. */
     if(size == 0) {
     	free(oldptr);
-    return 0;
+    	return 0;
     }
 
   /* If oldptr is NULL, then this is just malloc. */
@@ -171,7 +182,7 @@ void *realloc(void *oldptr, size_t size) {
     }
 
   /* Copy the old data. */
-    oldsize = *SIZE_PTR(oldptr);
+   // oldsize = *SIZE_PTR(oldptr);
     if(size < oldsize) oldsize = size;
     memcpy(newptr, oldptr, oldsize);
 
@@ -224,7 +235,7 @@ inline void *extend_heap(size_t words) {
 		return NULL;
 
 	old_epilogue = epilogue;
-	epilogue = bp + size = HDRSIZE;
+	epilogue = bp + size + HDRSIZE;
 
 	PUT(HDRP(bp), PACK(size, 0));
 	PUT(FTRP(bp), PACK(size, 0));
@@ -236,7 +247,9 @@ inline void *extend_heap(size_t words) {
 static void place(void *bp, size_t asize) {
 	size_t csize = GET_SIZE(HDRP(bp));
 	void *next_free_block = NEXT_FREE_BLKP(bp);
-	void *prev_free_block = PREV_FREE_BLKP(bp); 
+	void *prev_free_block = PREV_FREE_BLKP(bp);
+	void *next_freep = NEXT_FREEP(bp);
+	void *prev_freep = PREV_FREEP(bp);
 	if ((csize - asize) >= (3 * DSIZE)) {
 		PUT(HDRP(bp), PACK(asize, 1));
 		PUT(FTRP(bp), PACK(asize, 1));
@@ -244,17 +257,17 @@ static void place(void *bp, size_t asize) {
 		PUT(HDRP(bp), PACK(csize - asize, 0));
 		PUT(FTRP(bp), PACK(csize - asize, 0));
 		
-		PUT(NEXT_FREE_BLKP(bp), next_free_block);
-		PUT(PREV_FREE_BLKP(bp), prev_free_block);
-		PUT(PREV_FREE_BLKP(next_free_block), bp);
-		PUT(NEXT_FREE_BLKP(prev_free_block), bp);
+		//PUT8(NEXT_FREEP(bp), next_free_block);
+		//PUT8(PREV_FREEP(bp), prev_free_block);
+		//PUT8(PREV_FREEP(next_freep), bp);
+		//PUT8(NEXT_FREEP(prev_freep), bp);
 	}
 	else {
 		PUT(HDRP(bp), PACK(csize, 1));
 		PUT(FTRP(bp), PACK(csize, 1));
 		
-		PUT(NEXT_FREE_BLKP(prev_free_block), prev_free_block);
-		PUT(PREV_FREE_BLKP(next_free-block), next_free_block);
+		PUT8(NEXT_FREEP(prev_freep), prev_free_block);
+		PUT8(PREV_FREEP(next_freep), next_free_block);
 	}
 }
 
@@ -300,7 +313,7 @@ static void *coalesce(void *bp)
 		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 		PUT(HDRP(bp), PACK(size, 0));
 		PUT(FTRP(bp), PACK(size, 0));
-		PUT(NEXT_FREEP(bp), NEXT_FREE_BLKP(next_free_block));
+	//	PUT(NEXT_FREEP(bp), NEXT_FREE_BLKP(next_free_block));
 	}
 
 	else if(!prev_alloc && next_alloc) {
