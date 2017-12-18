@@ -38,6 +38,7 @@
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
 
+#define SIZE_PTR(p)  ((size_t *)(((char*)(p)) - SIZE_T_SIZE))
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(p) (((size_t)(p) + (ALIGNMENT-1)) & ~0x7)
 
@@ -95,7 +96,7 @@ int mm_init(void) {
 	heap_start = h_ptr;
 
 	PUT(h_ptr, NULL);
-	PUT(h_ptr + WSIZE, NULL);
+	PUT(h_ptr + WSIZE, NULL); //root
 	PUT(h_ptr + DSIZE, 0); //padding
 	PUT(h_ptr + DSIZE + HDRSIZE, PACK(OVERHEAD, 1)); //prologue header
 	PUT(h_ptr + DSIZE + HDRSIZE + FTRSIZE, PACK(OVERHEAD, 1)); //prologue footer
@@ -123,11 +124,11 @@ void *malloc (size_t size) {
 	if (size == 0)
 		return NULL;
 	
-	/*if (size <= DSIZE)
-		asize = 3 * DSIZE;
+	if (size <= DSIZE)
+		asize = 2 * DSIZE;
 	else
-		asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1))/ DSIZE) + DSIZE;
-*/
+		asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1))/ DSIZE);
+
 	asize = MAX(ALIGN(size + SIZE_T_SIZE), 24);
 	if ((bp = find_fit(asize)) != NULL) {
 		place(bp, asize);
@@ -182,7 +183,7 @@ void *realloc(void *oldptr, size_t size) {
     }
 
   /* Copy the old data. */
-   // oldsize = *SIZE_PTR(oldptr);
+    oldsize = *SIZE_PTR(oldptr);
     if(size < oldsize) oldsize = size;
     memcpy(newptr, oldptr, oldsize);
 
@@ -246,28 +247,22 @@ inline void *extend_heap(size_t words) {
 
 static void place(void *bp, size_t asize) {
 	size_t csize = GET_SIZE(HDRP(bp));
-	void *next_free_block = NEXT_FREE_BLKP(bp);
-	void *prev_free_block = PREV_FREE_BLKP(bp);
-	void *next_freep = NEXT_FREEP(bp);
-	void *prev_freep = PREV_FREEP(bp);
-	if ((csize - asize) >= (3 * DSIZE)) {
+	
+	if ((csize - asize) >= (2 * DSIZE)) {
 		PUT(HDRP(bp), PACK(asize, 1));
 		PUT(FTRP(bp), PACK(asize, 1));
+		PUT(NEXT_BLKP(bp), PREV_FREE_BLKP(bp));
+		PUT(NEXT_BLKP(bp) + WSIZE, NEXT_FREE_BLKP(bp));
+		
 		bp = NEXT_BLKP(bp);
 		PUT(HDRP(bp), PACK(csize - asize, 0));
 		PUT(FTRP(bp), PACK(csize - asize, 0));
 		
-		//PUT8(NEXT_FREEP(bp), next_free_block);
-		//PUT8(PREV_FREEP(bp), prev_free_block);
-		//PUT8(PREV_FREEP(next_freep), bp);
-		//PUT8(NEXT_FREEP(prev_freep), bp);
 	}
 	else {
 		PUT(HDRP(bp), PACK(csize, 1));
 		PUT(FTRP(bp), PACK(csize, 1));
-		
-		PUT8(NEXT_FREEP(prev_freep), prev_free_block);
-		PUT8(PREV_FREEP(next_freep), next_free_block);
+
 	}
 }
 
