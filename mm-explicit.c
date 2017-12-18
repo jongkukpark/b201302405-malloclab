@@ -41,18 +41,92 @@
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(p) (((size_t)(p) + (ALIGNMENT-1)) & ~0x7)
 
+#define AlIGNMENT 8
+
+#define HDRSIZE 4
+#define FTRSIZE 4
+#define WSIZE 4
+#define DSIZE 8
+#define CHUNKSIZE (1<<12)
+#define OVERHEAD 8
+
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+
+#define PACK(size, alloc) ((unsigned) ((size) | (alloc)))
+
+#define GET(p) (*(unsigned *)(p))
+#define PUT(p, val) (*(unsigned *)(p) = (unsigned)(val))
+#define GET8(p) (*(unsigned long *)(p))
+#define PUT8(p, val) (*(unsigned long *)(p) = (unsigned long)(val))
+
+#define GET_SIZE(p) (GET(p) & ~0x7)
+#define GET_ALLOC(p) (GET(p) & 0x1)
+
+#define HDRP(bp) ((char *)(bp) - WSIZE)
+#define FTRP(bp) ((char *)(bp) + GET_SIZE((char *)(bp) - DSIZE))
+
+#define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)))
+#define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))
+
+#define NEXT_FREEP(bp) ((char *)(bp))
+#define PREV_FREEP(bp) ((char *)(bp) + WSIZE)
+
+#define NEXT_FREE_BLKP(bp) ((char *)GET8((char *)(bp)))
+#define PREV_FREE_BLKP(bp) ((char *)GET8((char *)(bp) + WSIZE))
+
+#define ALIGN(p) (((size_t)(p) + (ALIGNMENT-1)) & ~0x7)
+
 /*
  * Initialize: return -1 on error, 0 on success.
  */
 int mm_init(void) {
-    return 0;
+    if ((h_ptr = mem_sbrk(DSIZE + 4 * HDRSIZE)) == NULL)
+		return -1;
+	heap_start = h_ptr;
+
+	PUT(h_ptr, NULL);
+	PUT(h_ptr + WSIZE, NULL);
+	PUT(h_ptr + DSIZE, 0);
+	PUT(h_ptr + DSIZE + HDRSIZE, PACK(OVERHEAD, 1));
+	PUT(h_ptr + DSIZE + HDRSIZE + FTRSIZE, PACK(OVERHEAD, 1));
+	PUT(h_ptr + DSIZE + 2 * HDRSIZE + FTRSIZE, PACK(0, 1));
+
+	h_ptr += DSIZE + DSIZE;
+
+	epilogue = h_ptr + HDRSIZE;
+
+	if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
+		return -1;
+
+	return 0;
 }
 
 /*
  * malloc
  */
 void *malloc (size_t size) {
-    return NULL;
+   	char *bp;
+	unsigned asize;
+	unsigned extendsize;
+	
+	// size가 올바르지 않을 때 예외처리
+	// block의 크기 결정
+	// 결정한 크기에 알맞은 블록을 list에서 검색하여 해당 위치에 할당
+
+	if ((bp = find_fit(asize)) != NULL) {
+		place(bp, asize);
+		return bp;
+	}
+
+	//free list에서 적절한 블록을 찾지 못했으면 힙을 늘려서 할당
+
+	extendsize = MAX(asize, CHUNKSIZE);
+	if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
+		return NULL;
+	place(bp, asize);
+	return bp;
+	return NULL;
 }
 
 /*
@@ -99,4 +173,24 @@ static int aligned(const void *p) {
  * mm_checkheap
  */
 void mm_checkheap(int verbose) {
+}
+
+inline void *extend_heap(size_t words) {
+	unsigned *old_epilogue;
+	char *bp;
+	unsigned size;
+
+	size = (words % 2) ? (words + 1) * WSIZE : words * WSIZE;
+
+	if ((long)(bp = mem_sbrk(size)) < 0 )
+		return NULL;
+
+	old_epilogue = epilogue;
+	epilogue = bp + size = HDRSIZE;
+
+	PUT(HDRP(bp), PACK(size, 0));
+	PUT(FTRP(bp), PACK(size, 0));
+	PUT(epilogue, PACK(0, 1));
+
+	return coalesce(bp);
 }
