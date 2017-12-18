@@ -87,10 +87,10 @@ int mm_init(void) {
 
 	PUT(h_ptr, NULL);
 	PUT(h_ptr + WSIZE, NULL);
-	PUT(h_ptr + DSIZE, 0);
-	PUT(h_ptr + DSIZE + HDRSIZE, PACK(OVERHEAD, 1));
-	PUT(h_ptr + DSIZE + HDRSIZE + FTRSIZE, PACK(OVERHEAD, 1));
-	PUT(h_ptr + DSIZE + 2 * HDRSIZE + FTRSIZE, PACK(0, 1));
+	PUT(h_ptr + DSIZE, 0); //padding
+	PUT(h_ptr + DSIZE + HDRSIZE, PACK(OVERHEAD, 1)); //prologue header
+	PUT(h_ptr + DSIZE + HDRSIZE + FTRSIZE, PACK(OVERHEAD, 1)); //prologue footer
+	PUT(h_ptr + DSIZE + 2 * HDRSIZE + FTRSIZE, PACK(0, 1)); //epilogue header
 
 	h_ptr += DSIZE + DSIZE;
 
@@ -257,3 +257,67 @@ static void place(void *bp, size_t asize) {
 		PUT(PREV_FREE_BLKP(next_free-block), next_free_block);
 	}
 }
+
+static void *find_fit(size_t asize) {
+   /*
+	*first fit
+	*/
+	/*void *bp;
+
+	for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+		if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+			return bp;
+		}
+	}
+	return NULL;*/
+   /*
+    *second fit
+	*/
+	void *bp;
+
+	for (bp = nextbp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+		if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+			nextbp = bp;
+			return bp;
+		}
+	}
+	return NULL;
+}
+
+static void *coalesce(void *bp) 
+{
+	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));	
+	size_t size = GET_SIZE(HDRP(bp));
+	void *next_free_block = NEXT_FREE_BLKP(bp);
+	void *prev_free_block = PREV_FREE_BLKP(bp); 
+
+	if (prev_alloc && next_alloc) {
+		
+	}
+
+	else if (prev_alloc && !next_alloc) {
+		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
+		PUT(HDRP(bp), PACK(size, 0));
+		PUT(FTRP(bp), PACK(size, 0));
+		PUT(NEXT_FREEP(bp), NEXT_FREE_BLKP(next_free_block));
+	}
+
+	else if(!prev_alloc && next_alloc) {
+		size += GET_SIZE(HDRP(PREV_BLKP(bp)));
+		PUT(FTRP(bp), PACK(size, 0));
+		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+		bp = PREV_BLKP(bp);
+	}
+
+	else {
+		size += GET_SIZE(HDRP(PREV_BLKP(bp))) + 
+			GET_SIZE(FTRP(NEXT_BLKP(bp)));
+		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+		PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+		bp = PREV_BLKP(bp);
+	}
+	nextbp = bp;
+	return bp;
+}
+
