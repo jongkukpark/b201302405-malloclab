@@ -110,9 +110,13 @@ void *malloc (size_t size) {
 	unsigned asize;
 	unsigned extendsize;
 	
-	// size가 올바르지 않을 때 예외처리
-	// block의 크기 결정
-	// 결정한 크기에 알맞은 블록을 list에서 검색하여 해당 위치에 할당
+	if (size == 0)
+		return NULL;
+	
+	if (size <= DSIZE)
+		asize = 3 * DSIZE;
+	else
+		asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1))/ DSIZE) + DSIZE;
 
 	if ((bp = find_fit(asize)) != NULL) {
 		place(bp, asize);
@@ -126,21 +130,55 @@ void *malloc (size_t size) {
 		return NULL;
 	place(bp, asize);
 	return bp;
-	return NULL;
 }
 
 /*
  * free
  */
-void free (void *ptr) {
-    if(!ptr) return;
+void free (void *bp) {
+    if(bp == 0) return;
+	size_t size = GET_SIZE(HDRP(bp));
+
+	PUT(HDRP(bp), PACK(size, 0));
+	PUT(FTRP(bp), PACK(size, 0));
+
+	coalesce(bp);
 }
 
 /*
  * realloc - you may want to look at mm-naive.c
  */
 void *realloc(void *oldptr, size_t size) {
-    return NULL;
+	size_t oldsize;
+    void *newptr;
+
+  /* If size == 0 then this is just free, and we return NULL. */
+    if(size == 0) {
+    	free(oldptr);
+    return 0;
+    }
+
+  /* If oldptr is NULL, then this is just malloc. */
+    if(oldptr == NULL) {
+   		return malloc(size);
+    }
+
+    newptr = malloc(size);
+
+  /* If realloc() fails the original block is left untouched  */
+    if(!newptr) {
+    	return 0;
+    }
+
+  /* Copy the old data. */
+    oldsize = *SIZE_PTR(oldptr);
+    if(size < oldsize) oldsize = size;
+    memcpy(newptr, oldptr, oldsize);
+
+  /* Free the old block. */
+    free(oldptr);
+
+    return newptr;
 }
 
 /*
@@ -193,4 +231,20 @@ inline void *extend_heap(size_t words) {
 	PUT(epilogue, PACK(0, 1));
 
 	return coalesce(bp);
+}
+
+static void place(void *bp, size_t asize) {
+	size_t csize = GET_SIZE(HDRP(bp));
+
+	if ((csize - asize) >= (2 * DSIZE)) {
+		PUT(HDRP(bp), PACK(asize, 1));
+		PUT(FTRP(bp), PACK(asize, 1));
+		bp = NEXT_BLKP(bp);
+		PUT(HDRP(bp), PACK(csize - asize, 0));
+		PUT(FTRP(bp), PACK(csize - asize, 0));
+	}
+	else {
+		PUT(HDRP(bp), PACK(csize, 1));
+		PUT(FTRP(bp), PACK(csize, 1));
+	}
 }
